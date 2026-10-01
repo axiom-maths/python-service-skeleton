@@ -1,10 +1,12 @@
-"""Turn a copy of the skeleton into a named project. Run once, then delete this file.
+"""Turn a copy of the skeleton into a named project. Run once: it deletes itself.
 
     uv run python scripts/rename.py --name my-service --github my-org/my-service
 
 Rewrites the skeleton's placeholder names in every file git would commit, retitles
-CONTEXT.md, moves the package directory, and re-locks both uv projects. The AWS account
-id and the alert email are not names, and are filled in by hand in infra/config.py.
+CONTEXT.md, moves the package directory, and re-locks both uv projects. Then it deletes
+itself, and takes scripts/ out of mypy's file list, which would otherwise fail on a
+directory that no longer exists. The AWS account id and the alert email are not names,
+and are filled in by hand in infra/config.py.
 
 The placeholders are the skeleton's real names, so the skeleton reads as itself. That
 means one string does two jobs: `axiom-maths/python-service-skeleton` in infra/config.py
@@ -41,6 +43,12 @@ SKIPPED = {"uv.lock"}
 # it, but its title is the skeleton's prose name, which no placeholder matches.
 CONTEXT = ROOT / "CONTEXT.md"
 CONTEXT_TITLE = "# Python service skeleton\n"
+
+# mypy checks this script while the skeleton has it, and errors on a listed directory
+# that is missing or holds no Python, so the entry goes when the script does.
+PYPROJECT = ROOT / "pyproject.toml"
+MYPY_FILES = 'files = ["src", "tests", "scripts"]'
+MYPY_FILES_AFTER = 'files = ["src", "tests"]'
 
 NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 GITHUB = re.compile(r"^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$")
@@ -84,6 +92,12 @@ def main() -> int:
     if not old_package_dir.is_dir():
         print("src/ no longer holds the placeholder package: already renamed?", file=sys.stderr)
         return 1
+    # Checked before anything changes, so a mismatch leaves the copy untouched rather
+    # than half renamed.
+    if MYPY_FILES not in PYPROJECT.read_text():
+        print(f"pyproject.toml no longer contains {MYPY_FILES!r}: update", file=sys.stderr)
+        print("MYPY_FILES in this script to match it, then run it again.", file=sys.stderr)
+        return 1
 
     changed = 0
     for path in files():
@@ -110,13 +124,19 @@ def main() -> int:
     for project in (ROOT, ROOT / "infra"):
         subprocess.run(["uv", "lock", "--quiet"], cwd=project, check=True)
 
-    print(f"Renamed {changed} files, moved src/{PLACEHOLDER_PACKAGE} to src/{package}.")
+    PYPROJECT.write_text(PYPROJECT.read_text().replace(MYPY_FILES, MYPY_FILES_AFTER))
+    THIS_FILE.unlink()
+    if not any(THIS_FILE.parent.iterdir()):
+        THIS_FILE.parent.rmdir()
+
+    print(f"Renamed {changed} files, moved src/{PLACEHOLDER_PACKAGE} to src/{package},")
+    print("and deleted scripts/rename.py.")
     print()
     print("Still to do by hand, in infra/config.py:")
     print("  ACCOUNT      the 12-digit AWS account id")
     print("  ALERT_EMAIL  who the budget and the alarms email")
     print()
-    print("Then: make install && make ci, and delete scripts/rename.py.")
+    print("Then: make install && make ci.")
     print("Add your domain's terms to CONTEXT.md, under a heading of their own.")
     return 0
 
