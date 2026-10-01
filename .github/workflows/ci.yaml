@@ -55,7 +55,7 @@ jobs:
 
       # Not on a manual run. A `workflow_dispatch` of the deploy has no change to
       # compare against, so it leaves both outputs unset and the jobs below run whole.
-      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         if: github.event_name != 'workflow_dispatch'
         with:
