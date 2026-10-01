@@ -1,0 +1,52 @@
+# The application. infra/ is a separate uv project with its own pyproject.toml — see
+# docs/development.md for why — and is excluded from every tool configured here.
+
+[project]
+name = "python-service-skeleton"
+version = "0.1.0"
+description = "Add a one-line description"
+requires-python = ">=3.14"
+license = "MIT"
+license-files = ["LICENSE"]
+# Empty on purpose, for now. src/ ships to Lambda exactly as it is, and the Lambda
+# runtime provides the standard library and boto3 and nothing else. Read "Adding a
+# runtime dependency" in docs/development.md before adding one here.
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.18,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["infra"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # bugbear
+    "C4",     # comprehensions
+    "SIM",    # simplify
+    "PTH",    # use pathlib
+    "RUF",
+]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["src", "tests", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"

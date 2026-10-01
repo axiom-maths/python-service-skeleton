@@ -1,0 +1,51 @@
+# Keeps the workflow actions' SHA pins, both uv projects and the pinned CDK CLI current.
+#
+# The actions are pinned to commit SHAs rather than tags because whoever controls an
+# action's repository can move a tag to new code, and every workflow using it runs that
+# code on the next push. A SHA cannot move. The cost is that nothing updates by itself,
+# which is what this file is for: Dependabot rewrites the SHA and the version comment
+# beside it.
+#
+# Minor and patch updates are grouped into one pull request per ecosystem, so routine
+# upkeep is one review a week rather than one per package. Majors come one at a time,
+# since those are the ones that break.
+#
+# The cooldown holds a new release back for a week before proposing it. A compromised
+# package is usually found and pulled within days, and a week-old version has had that
+# time. GitHub Actions does not support a cooldown; the SHA pin is its protection.
+#
+# aws-cdk-lib (uv, in infra/) and the aws-cdk CLI (npm, in infra/) arrive in separate
+# pull requests. A library newer than the CLI can fail `cdk synth` with a schema version
+# error, which CI catches: merge the CLI update first. See
+# docs/adr/0009-cdk-cli-pinned-in-infra-package-json.md.
+
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  - package-ecosystem: uv
+    directories: [/, /infra]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /infra
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      cdk-cli:
+        update-types: [minor, patch]

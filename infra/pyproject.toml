@@ -1,0 +1,51 @@
+# The infrastructure is its own uv project, separate from the application at the repo
+# root: its own dependencies, lockfile, virtualenv, tests and tool settings. Nothing
+# here imports the application and nothing there imports this, so CDK never reaches
+# the code that ships, and this directory can become its own repository by being
+# copied out — see "Splitting infrastructure out" in docs/infra.md.
+#
+# The ruff and mypy settings repeat the root pyproject.toml's on purpose, for the same
+# reason. Keep the two in step.
+
+[project]
+name = "python-service-skeleton-infra"
+version = "0.1.0"
+description = "AWS infrastructure for python-service-skeleton, in CDK Python"
+requires-python = ">=3.14"
+dependencies = [
+    "aws-cdk-lib>=2.272.0",
+    "constructs>=10.8.1",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]
+
+[tool.uv]
+# A CDK app, not a library: nothing to build or install.
+package = false
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["cdk.out", "node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "PTH", "RUF"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["app.py", "config.py", "stacks", "tests"]
+# `cdk synth` copies the Lambda asset — the application's src/ — into
+# cdk.out/asset.*/. Unexcluded, mypy finds the application package in there and
+# checks code that belongs to the other project. Ruff is unaffected: it honours
+# .gitignore, and mypy does not.
+exclude = ['^cdk\.out/']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers --strict-config"

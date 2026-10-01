@@ -1,0 +1,96 @@
+# Deploy on a merge to main: run CI, then `cdk deploy` with credentials minted for this
+# job alone.
+#
+# **CI is a dependency, not a neighbour.** ci.yaml is called rather than triggered, so a
+# merge cannot deploy past a failing test by racing it.
+#
+# **There are no AWS keys.** The job assumes a role through GitHub's OIDC provider, and
+# the role trusts exactly one subject: this repository, deploying into the `production`
+# environment. Its only permission is to assume the CDK bootstrap roles. Set up once by
+# hand — see "Turning it on" in docs/infra.md.
+#
+# **Off until it is set up.** The deploy job runs only once the DEPLOY_ROLE_ARN
+# repository variable exists, so a fresh copy of the skeleton does not fail red on every
+# merge before it has an AWS account to deploy to. A variable, not a secret: a role ARN
+# grants nothing without a token the trust policy accepts.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    # A docs-only merge cannot change a template, so it does not need a deploy.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  # Redeploy without a commit, e.g. after recovering a rolled-back stack.
+  workflow_dispatch:
+
+# Never cancel a deploy in flight. A cancelled `cdk deploy` leaves CloudFormation
+# mid-update, which is slower to recover from than the queued run it would have saved.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yaml
+    # A called workflow's token cannot hold a permission its caller does not grant, and
+    # asking for one fails the run before any step executes. ci.yaml's `what changed`
+    # job declares `pull-requests: read`, so it has to be handed over here even though
+    # a merge to main never uses it.
+    permissions:
+      contents: read
+      pull-requests: read
+
+  deploy:
+    name: Deploy production
+    needs: ci
+    # "Not red", rather than "green". Every job inside CI is conditional, so a merge
+    # that touches neither project (only the Makefile, say) skips them all, and a
+    # plain `needs: ci` would then skip this too. A pipeline that silently does nothing
+    # is worse than a redundant deploy of an unchanged tree. A failing CI still stops it.
+    if: ${{ !failure() && !cancelled() && vars.DEPLOY_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    # Not decoration. Naming the environment is what puts `environment:production` in
+    # the OIDC token's subject; without it the subject does not match the role's trust
+    # policy and the credentials step fails. The environment's deployment-branch rule
+    # is what decides which branches can get this far.
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: true
+          working-directory: infra
+
+      - name: Install
+        working-directory: infra
+        run: |
+          uv sync --locked
+          npm ci --silent
+
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-2
+          role-session-name: gha-${{ github.run_id }}
+
+      # Through `make`, so this runner and a laptop do the same thing.
+      - name: Deploy
+        run: make deploy CDK_FLAGS="--require-approval never --ci"

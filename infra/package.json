@@ -1,0 +1,8 @@
+{
+  "name": "python-service-skeleton-infra-cli",
+  "private": true,
+  "description": "Pins the AWS CDK CLI, run through npx. The infrastructure itself is Python: see pyproject.toml.",
+  "devDependencies": {
+    "aws-cdk": "2.1143.0"
+  }
+}
