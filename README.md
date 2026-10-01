@@ -47,8 +47,8 @@ make install   # both projects, and the pinned CDK CLI
 make ci        # lint, typecheck, test and synth
 ```
 
-Delete `scripts/rename.py`, rewrite this README for your project, add your domain's
-terms to `CONTEXT.md` under a heading of their own, and commit. Choose the
+The script deletes itself once it has run. Rewrite this README for your project, add
+your domain's terms to `CONTEXT.md` under a heading of their own, and commit. Choose the
 name with care: it prefixes every stack, and CloudFormation cannot rename a stack.
 
 To deploy, see [docs/infra.md](docs/infra.md).
@@ -62,7 +62,7 @@ infra/               the infrastructure, a separate uv project
   config.py          every value a new project changes
   app.py             the stacks, and the order they deploy in
   stacks/            one module per stack
-scripts/rename.py    run once on a fresh copy, then delete
+scripts/rename.py    run once on a fresh copy; it deletes itself
 ```
 
 `make help` lists every command.
