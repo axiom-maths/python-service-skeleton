@@ -12,6 +12,7 @@ would make what gets deployed — and where — depend on whose laptop ran the c
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import aws_cdk as cdk
 
@@ -35,6 +36,22 @@ GITHUB_REPOSITORY = "axiom-maths/python-service-skeleton"
 # role trusts only the legacy spelling, and a repository sending the new one is refused
 # with an error that names neither.
 GITHUB_REPOSITORY_IMMUTABLE: str | None = None
+
+# What the deploy role trusts besides the repository: a GitHub environment, or a branch.
+#
+# - "environment": a job deploying into the `production` GitHub environment. Which
+#   branches may deploy, and any required reviewers, are set on the environment in
+#   GitHub. Private repositories get environments only on a paid GitHub plan.
+# - "branch": any job running on `main`. For a private repository on GitHub Free, which
+#   has no environments. There is no branch protection on Free either, so anyone with
+#   write access can push to `main` and so deploy. Every Environment's role trusts that
+#   same subject, so it suits a Project with one Environment.
+#
+# deploy.yaml has to agree: its deploy job names `environment: production` for the
+# first and must not for the second, or the token's subject matches nothing.
+# tests/test_deploy.py fails until the two agree. See ADR-0013.
+DeployTrust = Literal["environment", "branch"]
+DEPLOY_TRUST: DeployTrust = "environment"
 
 # The AWS account and region. The placeholder account synthesises (CI and the tests
 # need nothing more), but any deploy refuses it: the CDK checks the account against the

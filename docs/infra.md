@@ -68,6 +68,8 @@ The workflow assumes `<project>-github-deploy-production` through GitHub's OIDC
 provider. The role trusts only this repository deploying into the `production`
 environment, and its only permission is to assume the CDK bootstrap roles
 ([ADR-0004](adr/0004-deploy-role-per-repository-trusting-a-github-environment.md)).
+A private repository on GitHub Free has no environments, so there the role trusts
+`main` instead ([ADR-0013](adr/0013-a-branch-trusting-deploy-role-for-github-free.md)).
 
 ### Turning it on
 
@@ -93,6 +95,15 @@ The role trusts the environment, and the environment's branch rule is what stops
 `workflow_dispatch` from another branch from deploying. Required reviewers, if you want
 them, also go on the environment.
 
+**A private repository on GitHub Free** cannot have environments. Before
+`make deploy-github-role`, set `DEPLOY_TRUST = "branch"` in `config.py` and delete the
+`environment: production` line from `.github/workflows/deploy.yaml` (`make ci` fails
+until both are done). Skip the two `environments` calls above, and set the variable as
+shown. The role then trusts any job on `main`, and the token's own subject keeps out a
+`workflow_dispatch` from another branch. Free has no branch protection for a private
+repository either, so anyone with write access can deploy by pushing to `main`. When
+the organisation moves to a paid plan, switch both back and deploy the role again.
+
 **Check which spelling of the repository GitHub sends.** Newer repositories put numeric
 ids in the OIDC subject:
 
@@ -108,8 +119,9 @@ The role then trusts both spellings, which name the same repository.
 
 - **`Not authorized to perform sts:AssumeRoleWithWebIdentity`.** The token's subject
   did not match the trust policy. The error looks the same as for a role that does not
-  exist. Check, in order: the job names the environment, the branch is one the
-  environment admits, and the role trusts the spelling GitHub sends. The stack output
+  exist. Check, in order: the job names the environment (or, with
+  `DEPLOY_TRUST = "branch"`, does not), the branch is one the role or environment
+  admits, and the role trusts the spelling GitHub sends. The stack output
   `TrustedSubjects` lists what the role accepts.
 - **The CDK refuses because the account does not match.** `ACCOUNT` in `config.py` is
   still the placeholder, or your credentials are for another account.

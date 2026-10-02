@@ -9,15 +9,22 @@ trust policy.
 for each job, the role trusts that token, and the repository holds no secret that could
 leak or need rotating.
 
-The trust is narrowed to a GitHub *environment*, not a branch:
+By default the trust is narrowed to a GitHub *environment*:
 
     repo:<owner>/<repo>:environment:production
 
 so the role cannot be assumed from a pull request, a fork, or a branch the environment
 does not admit. Which branches it admits is set on the environment in GitHub, so
-tightening it needs no deploy here. A branch subject (`…:ref:refs/heads/main`) is the
-alternative and is strictly weaker: it cannot carry an approval gate, and keeps working
-if a workflow is later pointed at a different environment.
+tightening it needs no deploy here, and the environment can require a reviewer.
+
+GitHub offers environments to private repositories only on a paid plan, so
+`DEPLOY_TRUST = "branch"` in config.py trusts a branch instead:
+
+    repo:<owner>/<repo>:ref:refs/heads/main
+
+That still keeps out pull requests, forks and other branches. What it gives up is the
+scoping to one job: any job on `main` that may mint an OIDC token can assume the role,
+which is why tests/test_deploy.py allows `id-token: write` in the deploy workflow alone.
 
 The role's only permission is to assume the CDK bootstrap roles. `cdk deploy` does every
 privileged thing — CloudFormation, the asset bucket — through those, so this role's blast
@@ -35,7 +42,13 @@ import aws_cdk as cdk
 from aws_cdk import aws_iam as iam
 from constructs import Construct
 
-from config import GITHUB_REPOSITORY, GITHUB_REPOSITORY_IMMUTABLE, PROJECT
+from config import (
+    DEPLOY_TRUST,
+    GITHUB_REPOSITORY,
+    GITHUB_REPOSITORY_IMMUTABLE,
+    PROJECT,
+    DeployTrust,
+)
 from stacks.base import BaseStack
 
 GITHUB_OIDC_ISSUER = "token.actions.githubusercontent.com"
@@ -45,8 +58,11 @@ GITHUB_OIDC_AUDIENCE = "sts.amazonaws.com"
 # with `--qualifier`.
 BOOTSTRAP_QUALIFIER = "hnb659fds"
 
+# The branch deploy.yaml runs on, and the one a branch-trusting role admits.
+DEPLOY_BRANCH = "main"
 
-def trusted_subjects(environment_name: str) -> list[str]:
+
+def trusted_subjects(environment_name: str, trust: DeployTrust) -> list[str]:
     """Every spelling of "this repository, deploying into this environment".
 
     Two spellings of one identity, not two identities. GitHub decides which it sends and
@@ -56,7 +72,11 @@ def trusted_subjects(environment_name: str) -> list[str]:
     repositories = [GITHUB_REPOSITORY]
     if GITHUB_REPOSITORY_IMMUTABLE:
         repositories.append(GITHUB_REPOSITORY_IMMUTABLE)
-    return [f"repo:{repo}:environment:{environment_name}" for repo in repositories]
+    if trust == "environment":
+        context = f"environment:{environment_name}"
+    else:
+        context = f"ref:refs/heads/{DEPLOY_BRANCH}"
+    return [f"repo:{repo}:{context}" for repo in repositories]
 
 
 class DeployStack(BaseStack):
@@ -70,7 +90,7 @@ class DeployStack(BaseStack):
             **kwargs,
         )
         environment_name = self.target.name
-        subjects = trusted_subjects(environment_name)
+        subjects = trusted_subjects(environment_name, DEPLOY_TRUST)
 
         role = iam.Role(
             self,
