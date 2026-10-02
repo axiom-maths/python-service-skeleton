@@ -22,7 +22,7 @@ _Avoid_: stage, deployment
 
 **Environment**:
 A Target that runs the Service, such as production or staging. It is also the name of
-the GitHub environment that gates deploys to it.
+the GitHub environment that gates deploys to it, where the repository has one.
 _Avoid_: stage, env
 
 **Shared**:

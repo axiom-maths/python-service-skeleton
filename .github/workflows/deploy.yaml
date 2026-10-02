@@ -6,8 +6,9 @@
 #
 # **There are no AWS keys.** The job assumes a role through GitHub's OIDC provider, and
 # the role trusts exactly one subject: this repository, deploying into the `production`
-# environment. Its only permission is to assume the CDK bootstrap roles. Set up once by
-# hand — see "Turning it on" in docs/infra.md.
+# environment, or running on `main` where config.py sets `DEPLOY_TRUST = "branch"`. Its
+# only permission is to assume the CDK bootstrap roles. Set up once by hand — see
+# "Turning it on" in docs/infra.md.
 #
 # **Off until it is set up.** The deploy job runs only once the DEPLOY_ROLE_ARN
 # repository variable exists, so a fresh copy of the skeleton does not fail red on every
@@ -60,7 +61,14 @@ jobs:
     # the OIDC token's subject; without it the subject does not match the role's trust
     # policy and the credentials step fails. The environment's deployment-branch rule
     # is what decides which branches can get this far.
+    #
+    # With `DEPLOY_TRUST = "branch"` in config.py, delete this line: the subject must
+    # then be `ref:refs/heads/main`, which naming an environment would replace.
+    # infra/tests/test_deploy.py fails while the two disagree.
     environment: production
+    # The only job in any workflow allowed to mint an OIDC token. A branch-trusting
+    # role admits every job on `main` that can, and infra/tests/test_deploy.py fails if
+    # a second one appears.
     permissions:
       contents: read
       id-token: write
